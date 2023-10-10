@@ -17,7 +17,7 @@ namespace Framework
         /// <summary>
         /// 工作文件夹
         /// </summary>
-        public static string WorkPath => Directory.GetCurrentDirectory();
+        public static string WorkPath { get; private set; }
 
         /// <summary>
         /// 临时音频文件位置
@@ -64,6 +64,13 @@ namespace Framework
         /// 使用的语音库
         /// </summary>
         public string Voice { get; set; } = "Microsoft Huihui Desktop";
+
+        public VideoMaker()
+        {
+            // 设置工作路径为当前路径
+            WorkPath = Directory.GetCurrentDirectory();
+        }
+
 
         /// <summary>
         /// 尝试获取源文件，存在输出文件时将输出文件复制到源文件位置
