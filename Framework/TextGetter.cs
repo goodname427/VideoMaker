@@ -1,5 +1,6 @@
 ﻿using System;
 using System.CodeDom;
+using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using System.Text;
@@ -10,9 +11,9 @@ namespace Framework
 {
     internal class TextGetter
     {
-        const string s_baseUrl = "https://www.bibiqu.com/";
-        static HttpClient s_cliet = new HttpClient();
-        static Random s_random = new Random();
+        private const string s_baseUrl = "https://www.bibiqu.com/";
+        private static readonly HttpClient s_cliet = new HttpClient();
+        private static readonly Random s_random = new Random();
 
         /// <summary>
         /// 获取一个随机的书本id

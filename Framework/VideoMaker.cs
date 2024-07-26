@@ -17,20 +17,26 @@ namespace Framework
         /// <summary>
         /// 工作文件夹
         /// </summary>
-        public static string WorkPath { get; private set; }
+        public static string WorkPath { get; private set; } =
+#if DEBUG
+                @"E:\CGL\Projects\2023DY\";
+#else
+                Directory.GetCurrentDirectory();
+#endif
 
         /// <summary>
         /// 临时音频文件位置
         /// </summary>
-        private string OutputWave => TempPath + "out_wave.wav";
+        private string OutputAudio => TempPath + "out_audio.wav";
         /// <summary>
         /// 临时源音频文件位置
         /// </summary>
-        private string SourceWaveNoUse => TempPath + "src_wave.wav";
+        private string SourceAudioNoUse => TempPath + "src_audio.wav";
         /// <summary>
         /// 临时源音频文件位置
         /// </summary>
-        private string SourceWave => TryGetSourceFile(SourceWaveNoUse, OutputWave);
+        private string SourceAudio => TryGetSourceFile(SourceAudioNoUse, OutputAudio);
+        
         /// <summary>
         /// 临时输出视频文件位置
         /// </summary>
@@ -43,6 +49,7 @@ namespace Framework
         /// 临时源视频文件位置，并且调整输出文件为源文件
         /// </summary>
         private string SourceVideo => TryGetSourceFile(SourceVideoNoUse, OutputVideo);
+        
         /// <summary>
         /// 临时文本文件位置
         /// </summary>
@@ -61,16 +68,13 @@ namespace Framework
         /// </summary>
         public string VideoExtension { get; set; } = ".mkv";
         /// <summary>
+        /// 音频文件扩展名
+        /// </summary>
+        public string BGMExtension { get; set; } = ".mp3";
+        /// <summary>
         /// 使用的语音库
         /// </summary>
         public string Voice { get; set; } = "Microsoft Huihui Desktop";
-
-        public VideoMaker()
-        {
-            // 设置工作路径为当前路径
-            WorkPath = Directory.GetCurrentDirectory();
-        }
-
 
         /// <summary>
         /// 尝试获取源文件，存在输出文件时将输出文件复制到源文件位置
@@ -89,72 +93,34 @@ namespace Framework
             }
             return sourceNoUse;
         }
-        /// <summary>
-        /// 执行命令行
-        /// </summary>
-        /// <param name="cmd"></param>
-        private void ExecuteCommand(string cmd)
-        {
-            var process = new Process();
-            process.StartInfo.FileName = "cmd.exe";
-            process.StartInfo.Arguments = "/c" + cmd;
-            process.StartInfo.UseShellExecute = false; //是否使用操作系统shell启动
-            process.StartInfo.CreateNoWindow = false; //是否在新窗口中启动该进程的值 (不显示程序窗口)
-            process.Start();
-            process.WaitForExit(); //等待程序执行完退出进程
-            process.Close();
 
-        }
-        /// <summary>
-        /// 执行命令行并返回执行结果
-        /// </summary>
-        /// <param name="cmd"></param>
-        /// <returns></returns>
-        private string ExecuteCommandWithResult(string cmd)
-        {
-            var process = new Process();
-            //初始化
-            process.StartInfo.FileName = "cmd.exe";
-            process.StartInfo.UseShellExecute = false; //是否使用操作系统shell启动
-            process.StartInfo.RedirectStandardInput = true; //接受来自调用程序的输入信息
-            process.StartInfo.RedirectStandardOutput = true; //由调用程序获取输出信息
-            process.StartInfo.RedirectStandardError = true; //重定向标准错误输出
-            process.StartInfo.CreateNoWindow = true; //不显示程序窗口
-            //执行指令
-            process.Start();
-            process.StandardInput.WriteLine(cmd + "&exit");
-            process.StandardInput.AutoFlush = true;
-            var result = process.StandardOutput.ReadToEnd();
-            //退出cmd
-            process.WaitForExit();//等待程序执行完退出进程
-            process.Close();
-            return result;
-        }
 
         /// <summary>
         /// 获取视频或者音频时长
         /// </summary>
+        /// <param name="filename">视频或音频文件名</param>
         /// <returns></returns>
-        private double GetDuration(string fileName)
+        private double GetMediaDuration(string filename)
         {
-            var result = ExecuteCommandWithResult($"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -i {fileName}");
+            var result = Command.ExecuteWithResult($"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -i \"{filename}\"");
             return double.Parse(Regex.Match(result, @"(\d+)(\.\d+?)?(?=\r\n)").Value);
         }
         /// <summary>
         /// 获取视频尺寸
         /// </summary>
-        /// <param name="fileName"></param>
-        private void GetSize(string fileName, out int width, out int height)
+        /// <param name="filename">视频文件名</param>
+        private void GetVideoSize(string filename, out int width, out int height)
         {
-            var result = ExecuteCommandWithResult($"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 {fileName}");
+            var result = Command.ExecuteWithResult($"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 {filename}");
             var match = Regex.Match(result, @"(\d+)x(\d+)");
             (width, height) = (int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value));
         }
+
         /// <summary>
-        /// 生成音频
+        /// 生成音频和字幕
         /// </summary>
         /// <param name="text"></param>
-        private TextInfo[] GetWaveFileAndSubtitles(string text)
+        private TextInfo[] CreateAudioAndSubtitles(string text)
         {
             //分割文本
             var segments = ChineseSentenceTokenizer.Tokenize1(text);
@@ -184,7 +150,7 @@ namespace Framework
                 synthesizer.Rate = 4;
                 synthesizer.SelectVoice(Voice);
                 //synthesizer.SelectVoiceByHints(VoiceGender.Female);
-                synthesizer.SetOutputToWaveFile(OutputWave);
+                synthesizer.SetOutputToWaveFile(OutputAudio);
                 synthesizer.BookmarkReached += (o, e) =>
                     {
                         if (i > 0)
@@ -207,10 +173,10 @@ namespace Framework
         /// </summary>
         /// <param name="texts"></param>
         /// <returns></returns>
-        private TextInfo[] SetSubtitleBreak(TextInfo[] texts)
+        private TextInfo[] BreakSubtitle(TextInfo[] texts)
         {
             //自适应屏幕
-            GetSize(SourceVideo, out var width, out _);
+            GetVideoSize(SourceVideo, out var width, out _);
             var max = width / texts.First().FontSize;
             return (
                     from t in texts
@@ -218,18 +184,18 @@ namespace Framework
                     select st
                     ).ToArray();
         }
-
         /// <summary>
-        /// 合成匹配音频时长的视频
+        /// 合成指定时长的视频或音频
         /// </summary>
-        /// <param name="videoFileName"></param>
-        private void CombineVideo(string videoPath, TimeSpan lastTime)
+        /// <param name="lastTime">视频时长</param>
+        /// <param name="mediaPath">视频路径</param>
+        private void CreateMatchDurationMedia(string mediaPath, TimeSpan lastTime, string mediaExtension, Func<string> outputGetter, Func<string> sourceGetter)
         {
-            var videoDurations = new Dictionary<int, double>();
-            var files = Directory.GetFiles(videoPath).Where((file) => Path.GetExtension(file) == VideoExtension).ToArray();
+            var durations = new Dictionary<int, double>();
+            var files = Directory.GetFiles(mediaPath).Where((file) => Path.GetExtension(file) == mediaExtension).ToArray();
             //获取视频时长
             for (int i = 0; i < files.Length; i++)
-                videoDurations[i] = GetDuration(files[i]);
+                durations[i] = GetMediaDuration(files[i]);
 
             //合成视频
             double totalDuration = 0;
@@ -241,21 +207,22 @@ namespace Framework
             {
                 var index = r.Next(files.Length);
                 var file = files[index];
-                totalDuration += videoDurations[index];
+                totalDuration += durations[index];
                 sb.AppendLine($"file '{file}'");
             }
             while (totalDuration < lastTime.TotalSeconds);
 
             //合成
             File.WriteAllText(Txt, sb.ToString());
-            ExecuteCommand($"ffmpeg -f concat -safe 0 -i {Txt} -c copy -y {OutputVideo}");
-            ExecuteCommand($"ffmpeg -i {SourceVideo} -vcodec copy -acodec copy -ss 00 -to {lastTime} -y {OutputVideo}");
+            Command.Execute($"ffmpeg -f concat -safe 0 -i {Txt} -c copy -y {outputGetter()}");
+            Command.Execute($"ffmpeg -i {sourceGetter()} -vcodec copy -acodec copy -ss 00 -to {lastTime} -y {outputGetter()}");
         }
+
         /// <summary>
         /// 合成视频和字幕
         /// </summary>
         /// <param name="texts"></param>
-        private void CombineSubtitles(TextInfo[] texts)
+        private void CombineSubtitlesAndVedio(TextInfo[] texts)
         {
             //合成命令
             var sb = new StringBuilder();
@@ -273,19 +240,19 @@ namespace Framework
 
             //执行命令
             var cmd = $"ffmpeg -i {SourceVideo} -filter_complex_script {Txt} -y {OutputVideo}";
-            ExecuteCommand(cmd);
+            Command.Execute(cmd);
         }
         /// <summary>
         /// 合成视频和音频
         /// </summary>
-        /// <param name="videoFileName"></param>
-        private void CombineWaveFile(double lastTime)
+        /// <param name="lastTime"></param>
+        private void CombineAudioAndVedio(double lastTime)
         {
             //调整视频速度
-            var speed = GetDuration(SourceWave) / lastTime;
-            ExecuteCommand($"ffmpeg -i {SourceVideo} -filter:v  \"setpts={speed}*PTS\"  {OutputVideo}");
+            var speed = GetMediaDuration(SourceAudio) / lastTime;
+            Command.Execute($"ffmpeg -i {SourceVideo} -filter:v  \"setpts={speed}*PTS\"  {OutputVideo}");
             //合成视频和音频
-            ExecuteCommand($"ffmpeg -i {SourceVideo} -i {SourceWave} -c:v copy -c:a aac -strict experimental -map 0:v:0 -map 1:a:0 -y {OutputVideo}");
+            Command.Execute($"ffmpeg -i {SourceVideo} -i {SourceAudio} -c:v copy -c:a aac -strict experimental -map 0:v:0 -map 1:a:0 -y {OutputVideo}");
         }
 
         /// <summary>
@@ -293,7 +260,7 @@ namespace Framework
         /// </summary>
         /// <param name="videoPath">视频文件夹路径</param>
         /// <param name="text"></param>
-        public void GetVideo(string videoPath, string text, string videoFileName = "out")
+        public void MakeVideo(string videoPath, string text, string videoFilename = "out", string bgmPath = "")
         {
             //创建临时文件夹
             if (!Directory.Exists(TempPath))
@@ -302,16 +269,39 @@ namespace Framework
             try
             {
                 //合成视频
-                var texts = GetWaveFileAndSubtitles(text);
+
+                // 生成音频和字幕
+                Console.WriteLine("生成音频和字幕");
+                var texts = CreateAudioAndSubtitles(text);
+                // 记录视频持续时间
                 var lastTime = texts.Last().ToTime;
-                CombineVideo(videoPath, lastTime);
-                texts = SetSubtitleBreak(texts);
-                CombineSubtitles(texts);
-                CombineWaveFile(lastTime.TotalSeconds);
+
+                // 生成匹配时长的视频
+                Console.WriteLine("生成匹配时长的视频");
+                CreateMatchDurationMedia(videoPath, lastTime, VideoExtension, () => OutputVideo, () => SourceVideo);
+
+                // 字幕断行
+                Console.WriteLine("字幕断行");
+                texts = BreakSubtitle(texts);
+                // 合成字幕和视频
+                Console.WriteLine("合成字幕和视频");
+                CombineSubtitlesAndVedio(texts);
+
+                // 合成音频和视频
+                Console.WriteLine("合成音频和视频");
+                CombineAudioAndVedio(lastTime.TotalSeconds);
+
+                // 合成BGM, 如果输入的话
+                //if (!string.IsNullOrWhiteSpace(bgmPath))
+                //{
+                //    CreateMatchDurationMedia(bgmPath, lastTime, BGMExtension, () => OutputAudio, () => SourceAudio);
+                //    CombineAudio(lastTime.TotalSeconds);
+                //}
+
 
                 //输出视频文件
                 if (File.Exists(OutputVideo))
-                    File.Copy(OutputVideo, OutputPath + videoFileName + VideoExtension, true);
+                    File.Copy(OutputVideo, OutputPath + videoFilename + VideoExtension, true);
             }
             finally
             {
