@@ -19,7 +19,8 @@ namespace Framework
         /// </summary>
         public static string WorkPath { get; private set; } =
 #if DEBUG
-                @"E:\CGL\Projects\2023DY\";
+                //@"E:\CGL\Projects\2023DY\";
+                "D:\\cgl\\cgl_document\\Projects\\2023DY\\";
 #else
                 Directory.GetCurrentDirectory();
 #endif
@@ -272,9 +273,9 @@ namespace Framework
 
                 // 生成音频和字幕
                 Console.WriteLine("生成音频和字幕");
-                var texts = CreateAudioAndSubtitles(text);
+                var subtitles = CreateAudioAndSubtitles(text);
                 // 记录视频持续时间
-                var lastTime = texts.Last().ToTime;
+                var lastTime = subtitles.Last().ToTime;
 
                 // 生成匹配时长的视频
                 Console.WriteLine("生成匹配时长的视频");
@@ -282,16 +283,16 @@ namespace Framework
 
                 // 字幕断行
                 Console.WriteLine("字幕断行");
-                texts = BreakSubtitle(texts);
+                subtitles = BreakSubtitle(subtitles);
                 // 合成字幕和视频
                 Console.WriteLine("合成字幕和视频");
-                CombineSubtitlesAndVedio(texts);
+                CombineSubtitlesAndVedio(subtitles);
 
                 // 合成音频和视频
                 Console.WriteLine("合成音频和视频");
                 CombineAudioAndVedio(lastTime.TotalSeconds);
 
-                // 合成BGM, 如果输入的话
+                //// 合成BGM, 如果输入的话
                 //if (!string.IsNullOrWhiteSpace(bgmPath))
                 //{
                 //    CreateMatchDurationMedia(bgmPath, lastTime, BGMExtension, () => OutputAudio, () => SourceAudio);

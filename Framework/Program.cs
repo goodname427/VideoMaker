@@ -42,6 +42,8 @@ namespace Framework
                     break;
             }
 
+            text = config.GetString("TextPrefix") + text;
+
             //合成视频
             videoMaker.MakeVideo(VideoMaker.WorkPath + config["VideoPath"], text, fileName, VideoMaker.WorkPath + config["BGMPath"]);
 
